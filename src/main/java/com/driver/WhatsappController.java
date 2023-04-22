@@ -20,7 +20,6 @@ import org.springframework.web.bind.annotation.RestController;
 public class WhatsappController {
 
     //Autowire will not work in this case, no need to change this and add autowire
-    @Autowired
     WhatsappService whatsappService = new WhatsappService();
 
     @PostMapping("/add-user")
@@ -28,7 +27,15 @@ public class WhatsappController {
         //If the mobile number exists in database, throw "User already exists" exception
         //Otherwise, create the user and return "SUCCESS"
 
-        return whatsappService.createUser(name, mobile);
+        String res = whatsappService.createUser(name, mobile);
+        if(res==null)
+        {
+            throw new Exception("User already exists");
+        }
+        else
+        {
+            return res;
+        }
     }
 
     @PostMapping("/add-group")
@@ -43,6 +50,7 @@ public class WhatsappController {
         //If createGroup is called for these userLists in the same order, their group names would be "Group 1", "Evan", and "Group 2" respectively.
 
         return whatsappService.createGroup(users);
+
     }
 
     @PostMapping("/add-message")
@@ -59,7 +67,16 @@ public class WhatsappController {
         //Throw "You are not allowed to send message" if the sender is not a member of the group
         //If the message is sent successfully, return the final number of messages in that group.
 
-        return whatsappService.sendMessage(message, sender, group);
+        int value = whatsappService.sendMessage(message, sender, group);
+        if(value == -1)
+        {
+            throw new Exception("Group does not exist");
+        }
+        else if(value == -2)
+        {
+            throw new Exception("You are not allowed to send message");
+        }
+        return value;
     }
     @PutMapping("/change-admin")
     public String changeAdmin(User approver, User user, Group group) throws Exception{
@@ -68,7 +85,23 @@ public class WhatsappController {
         //Throw "User is not a participant" if the user is not a part of the group
         //Change the admin of the group to "user" and return "SUCCESS". Note that at one time there is only one admin and the admin rights are transferred from approver to user.
 
-        return whatsappService.changeAdmin(approver, user, group);
+        String s = whatsappService.changeAdmin(approver, user, group);
+        if(s.equals("Group doesnot exist"))
+        {
+            throw new Exception("Group does not exist");
+        }
+        else if(s.equals("not admin"))
+        {
+            throw new Exception("Approver does not have rights");
+        }
+        else if(s.equals("user not in a group"))
+        {
+            throw new Exception("User is not a participant");
+        }
+        else
+        {
+            return s;
+        }
     }
 
     @DeleteMapping("/remove-user")
@@ -80,7 +113,19 @@ public class WhatsappController {
         //If user is not the admin, remove the user from the group, remove all its messages from all the databases, and update relevant attributes accordingly.
         //If user is removed successfully, return (the updated number of users in the group + the updated number of messages in group + the updated number of overall messages)
 
-        return whatsappService.removeUser(user);
+        int x = whatsappService.removeUser(user);
+        if(x == -1)
+        {
+            throw new Exception("User not found");
+        }
+        else if(x == -2)
+        {
+            throw new Exception("Cannot remove admin");
+        }
+        else
+        {
+            return x;
+        }
     }
 
     @GetMapping("/find-messages")
@@ -89,6 +134,15 @@ public class WhatsappController {
         // Find the Kth latest message between start and end (excluding start and end)
         // If the number of messages between given time is less than K, throw "K is greater than the number of messages" exception
 
-        return whatsappService.findMessage(start, end, K);
+        String msg = whatsappService.findMessage(start, end, K);
+
+        if(msg.equals("K is greater than the number of messages"))
+        {
+            throw new Exception("K is greater than the number of messages");
+        }
+        else
+        {
+            return msg;
+        }
     }
 }

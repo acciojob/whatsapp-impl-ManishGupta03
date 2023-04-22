@@ -2,6 +2,7 @@ package com.driver;
 
 import java.util.*;
 
+import io.swagger.models.auth.In;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -14,154 +15,167 @@ public class WhatsappRepository {
     private HashMap<Message, User> senderMap;
     private HashMap<Group, User> adminMap;
     private HashSet<String> userMobile;
+
     private int customGroupCount;
     private int messageId;
 
-    public WhatsappRepository(){
+    public WhatsappRepository() {
         this.groupMessageMap = new HashMap<Group, List<Message>>();
         this.groupUserMap = new HashMap<Group, List<User>>();
         this.senderMap = new HashMap<Message, User>();
         this.adminMap = new HashMap<Group, User>();
         this.userMobile = new HashSet<>();
-        this.customGroupCount = 0;
+        this.customGroupCount = 1;
         this.messageId = 0;
     }
 
-    public String createUser(String name, String mobile) throws Exception {
-        //If the mobile number exists in database, throw "User already exists" exception
-        //Otherwise, create the user and return "SUCCESS"
-        if(userMobile.contains(mobile))
-            throw new Exception("User already exists");
+    public String createUser(String name, String mobileNo) {
+        if (!userMobile.contains(mobileNo)) {
+            User user = new User(name, mobileNo);
+//            userMap.put(mobileNo, user);
+            userMobile.add(mobileNo);
+            return "SUCCESS";
+        }
 
-
-
-        User user = new User();
-        user.setName(name);
-        user.setMobile(mobile);
-        userMobile.add(mobile);
-
-        return "Success";
+        return null;
     }
 
+
     public Group createGroup(List<User> users) {
-        // The list contains at least 2 users where the first user is the admin. A group has exactly one admin.
-        // If there are only 2 users, the group is a personal chat and the group name should be kept as the name of the second user(other than admin)
-        // If there are 2+ users, the name of group should be "Group count". For example, the name of first group would be "Group 1", second would be "Group 2" and so on.
-        // Note that a personal chat is not considered a group and the count is not updated for personal chats.
-        // If group is successfully created, return group.
+        if (users.size() < 2) return null;
 
-        //For example: Consider userList1 = {Alex, Bob, Charlie}, userList2 = {Dan, Evan}, userList3 = {Felix, Graham, Hugh}.
-        //If createGroup is called for these userLists in the same order, their group names would be "Group 1", "Evan", and "Group 2" respectively.
-        if(users.size() == 2){
-            Group group = new Group();
-
-            group.setName(users.get(1).getName());
-            group.setNumberOfParticipants(2);
-
-            //adminMap.put(group,users.get(0));
+        if (users.size() == 2) {
+            Group group = new Group(users.get(1).getName(), 2);
             groupUserMap.put(group, users);
-            groupMessageMap.put(group,new ArrayList<Message>());
-
+            adminMap.put(group, users.get(0));
             return group;
         }
-        this.customGroupCount += 1;
-        Group group = new Group(new String("Group "+this.customGroupCount), users.size());
-        adminMap.put(group, users.get(0));
-        groupUserMap.put(group, users);
-        groupMessageMap.put(group, new ArrayList<Message>());
-        return group;
+
+        if (users.size() > 2) {
+            Group group = new Group("Group "+customGroupCount,users.size());
+            groupUserMap.put(group, users);
+            adminMap.put(group, users.get(0));
+            customGroupCount++;
+            return group;
+        }
+
+        return null;
     }
 
     public int createMessage(String content) {
-        // The 'i^th' created message has message id 'i'.
-        // Return the message id.
-        this.messageId+=1;
-        Message message = new Message();
-
-        message.setId(messageId);
-        message.setContent(content);
-
-        return message.getId();
-
+        messageId++;
+        Message msg = new Message(messageId, content);
+        //senderMap.put(msg,null);
+        return messageId;
     }
 
-    public int sendMessage(Message message, User sender, Group group) throws Exception {
-        //Throw "Group does not exist" if the mentioned group does not exist
-        //Throw "You are not allowed to send message" if the sender is not a member of the group
-        //If the message is sent successfully, return the final number of messages in that group.
+    public int sendMessage(Message message, User sender, Group group) {
 
-        if(!groupUserMap.containsKey(group)){
-            throw new Exception("Group does not exist");
+        if (!(groupUserMap.containsKey(group))) return -1;
+
+        if (!(groupUserMap.get(group).contains(sender))) return -2;
+
+        if (groupUserMap.containsKey(group) && groupUserMap.get(group).contains(sender)) {
+            if (groupMessageMap.containsKey(group)) {
+                groupMessageMap.get(group).add(message);
+            } else {
+                List<Message> list = new ArrayList<>();
+                list.add(message);
+                groupMessageMap.put(group, list);
+            }
         }
-        if(!groupUserMap.get(group).contains(sender)){
-            throw new Exception("You are not allowed to send message");
-        }
-        List<Message> messageList = groupMessageMap.get(group);
-        messageList.add(message);
-        groupMessageMap.put(group,messageList);
 
         senderMap.put(message,sender);
-
         return groupMessageMap.get(group).size();
     }
 
-    public String changeAdmin(User approver, User user, Group group) throws Exception {
-        //Throw "Group does not exist" if the mentioned group does not exist
-        //Throw "Approver does not have rights" if the approver is not the current admin of the group
-        //Throw "User is not a participant" if the user is not a part of the group
-        //Change the admin of the group to "user" and return "SUCCESS". Note that at one time there is only one admin and the admin rights are transferred from approver to user.
+    public String changeAdmin(User approver, User user, Group group) {
+        if (!(groupUserMap.containsKey(group))) {
+            return "Group doesnot exist";
+        }
 
-        if(!groupUserMap.containsKey(group)){
-            throw new Exception("Group does not exist");
+        if (!(adminMap.get(group).equals(approver))) {
+            return "not admin";
         }
-        if(adminMap.get(group) != approver){
-            throw new Exception("Approver does not have rights");
+
+        if (!(groupUserMap.get(group).contains(user))) {
+            return "user not in a group";
         }
-        if(!groupUserMap.get(group).contains(user)){
-            throw new Exception("User is not a participant");
+        else
+        {
+            adminMap.put(group, user);
         }
-        adminMap.replace(group,user);
+
         return "SUCCESS";
     }
 
-    public int removeUser(User user) throws Exception {
-        for(Group gp: groupUserMap.keySet()) {
-            List<User> userList = groupUserMap.get(gp);
-            if (userList.contains(user)) {
-                for (User admin : adminMap.values()) {
-                    if (admin == user) {
-                        throw new Exception("Cannot remove admin");
-                    }
-                }
-                groupUserMap.get(gp).remove(user);
+    public int removeUser(User user)
+    {
+        boolean b = false;
+        Group group =null;
 
-                for (Message m: senderMap.keySet()){
-                    User u = senderMap.get(m);
-                    if(u == user) {
-                        senderMap.remove(m);
-                        groupMessageMap.get(gp).remove(m);
-                        return groupUserMap.get(gp).size() + groupMessageMap.get(gp).size() + senderMap.size();
-                    }
-                }
+        for(Group g : groupUserMap.keySet())
+        {
+            if(groupUserMap.get(g).contains(user))
+            {
+                group = g;
+                b = true;
+                break;
             }
         }
-        throw new Exception("User not found");
+
+        if(b==false) return -1;
+
+        if(b==true)
+        {
+            if(adminMap.containsKey(user))
+            {
+                return -2;
+            }
+        }
+
+        groupUserMap.get(group).remove(user);
+
+        List<Message> list = new ArrayList<>();
+
+        for(Message msg : senderMap.keySet())
+        {
+            if(senderMap.get(msg).equals(user))
+            {
+                list.add(msg);
+            }
+        }
+
+        for(Message msg : list)
+        {
+            groupMessageMap.get(group).remove(msg);
+            senderMap.remove(msg);
+        }
+
+        return group.getNumberOfParticipants() + groupMessageMap.get(group).size() + senderMap.size();
+
     }
 
-    public String findMessage(Date start, Date end, int k) throws Exception {
-        TreeMap<Integer,String> map = new TreeMap<>();
-        ArrayList <Integer> list = new ArrayList<>();
-        for (Message m: senderMap.keySet()){
-            if( m.getTimestamp().compareTo(start) > 0 && m.getTimestamp().compareTo(end) < 0){
-                map.put(m.getId(),m.getContent());
-                list.add(m.getId());
+    public String findMessage(Date start, Date end, int K)
+    {
+        int count =0;
+        List<Message> list = new ArrayList<>();
+        for(Message msg : senderMap.keySet())
+        {
+            if(msg.getTimestamp().compareTo(start)>0 && msg.getTimestamp().compareTo(end)<0)
+            {
+                list.add(msg);
+                count++;
             }
         }
-        if (map.size() < k){
-            throw new Exception("K is greater than the number of messages");
+
+        if(count < K)
+        {
+            return "K is greater than the number of messages";
         }
-        Collections.sort(list);
-        int K= list.get(list.size()-k);
-        return map.get(K);
+
+
+        return list.get(count-K).getContent();
+
     }
 }
